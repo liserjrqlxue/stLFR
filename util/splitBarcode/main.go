@@ -121,7 +121,7 @@ func main() {
 
 	var out10xFq1 = osUtil.Create(*prefix + "_S1_L001_R1_001.fastq.gz")
 	defer simpleUtil.DeferClose(out10xFq1)
-	var out10xFq2 = osUtil.Create(*prefix + "_S1_L001_R1_001.fastq.gz")
+	var out10xFq2 = osUtil.Create(*prefix + "_S1_L001_R2_001.fastq.gz")
 	defer simpleUtil.DeferClose(out10xFq2)
 
 	var out10xFq1Zw = gzip.NewWriter(out10xFq1)
