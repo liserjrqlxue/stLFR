@@ -29,11 +29,6 @@ var (
 		filepath.Join(dbPath, "barcode.list"),
 		"barcode list",
 	)
-	barcodeRCList = flag.String(
-		"rc",
-		filepath.Join(dbPath, "barcode_RC.list"),
-		"barcod RC list",
-	)
 	read1 = flag.String(
 		"fq1",
 		"",
@@ -82,7 +77,7 @@ func main() {
 
 	var fq1 = osUtil.Open(*read1)
 	defer simpleUtil.DeferClose(fq1)
-	var fq2 = osUtil.Open(*read1)
+	var fq2 = osUtil.Open(*read2)
 	defer simpleUtil.DeferClose(fq2)
 
 	var fq1Gr = simpleUtil.HandleError(gzip.NewReader(fq1)).(*gzip.Reader)
