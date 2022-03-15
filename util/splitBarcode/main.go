@@ -87,9 +87,10 @@ func main() {
 
 	}
 
-	var outFq1 = osUtil.Create(filepath.Join(*prefix, ".1.fq.gz"))
+	simpleUtil.CheckErr(os.MkdirAll(filepath.Dir(*prefix), 0700))
+	var outFq1 = osUtil.Create(*prefix + ".1.fq.gz")
 	defer simpleUtil.DeferClose(outFq1)
-	var outFq2 = osUtil.Create(filepath.Join(*prefix, ".2.fq.gz"))
+	var outFq2 = osUtil.Create(*prefix + ".2.fq.gz")
 	defer simpleUtil.DeferClose(outFq2)
 
 	var outFq1Zw = gzip.NewWriter(outFq1)
