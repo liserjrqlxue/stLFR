@@ -140,7 +140,7 @@ func main() {
 				}
 			case 2:
 				var line1 = fq1Scanner.Bytes()
-				var line2 = fq1Scanner.Bytes()
+				var line2 = fq2Scanner.Bytes()
 				var (
 					b1id, ok1  = barcodeHash[string(line2[length1:length1e])]
 					b2id, ok2  = barcodeHash[string(line2[length2:length2e])]
