@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"flag"
 	"fmt"
 	"log"
@@ -28,6 +29,11 @@ var (
 		"bc",
 		filepath.Join(dbPath, "barcode.list"),
 		"barcode list",
+	)
+	mapList = flag.String(
+		"map",
+		filepath.Join(dbPath, "BIN/4M-with-alts-february-2016.txt"),
+		"map list",
 	)
 	read1 = flag.String(
 		"fq1",
@@ -76,6 +82,17 @@ func main() {
 		}
 	}
 
+	// load map list
+	var ml = osUtil.Open(*mapList)
+	defer simpleUtil.DeferClose(ml)
+	var mlScan = bufio.NewScanner(ml)
+	var mapHash = make(map[int]string)
+	var mlCount = 0
+	for mlScan.Scan() {
+		mlCount++
+		mapHash[mlCount] = mlScan.Text()
+	}
+
 	var reads1 = strings.Split(*read1, ",")
 	var reads2 = strings.Split(*read2, ",")
 	if len(reads1) != len(reads2) {
@@ -88,15 +105,25 @@ func main() {
 	}
 
 	simpleUtil.CheckErr(os.MkdirAll(filepath.Dir(*prefix), 0700))
-	var outFq1 = osUtil.Create(*prefix + ".1.fq.gz")
+	var outFq1 = osUtil.Create(*prefix + "_split_read.1.fq.gz")
 	defer simpleUtil.DeferClose(outFq1)
-	var outFq2 = osUtil.Create(*prefix + ".2.fq.gz")
+	var outFq2 = osUtil.Create(*prefix + "_split_read.2.fq.gz")
 	defer simpleUtil.DeferClose(outFq2)
 
 	var outFq1Zw = gzip.NewWriter(outFq1)
 	defer simpleUtil.DeferClose(outFq1Zw)
 	var outFq2Zw = gzip.NewWriter(outFq2)
 	defer simpleUtil.DeferClose(outFq2Zw)
+
+	var out10xFq1 = osUtil.Create(*prefix + "_S1_L001_R1_001.fastq.gz")
+	defer simpleUtil.DeferClose(out10xFq1)
+	var out10xFq2 = osUtil.Create(*prefix + "_S1_L001_R1_001.fastq.gz")
+	defer simpleUtil.DeferClose(out10xFq2)
+
+	var out10xFq1Zw = gzip.NewWriter(out10xFq1)
+	defer simpleUtil.DeferClose(out10xFq1Zw)
+	var out10xFq2Zw = gzip.NewWriter(out10xFq2)
+	defer simpleUtil.DeferClose(out10xFq2Zw)
 
 	var (
 		// barcode seq
@@ -115,6 +142,13 @@ func main() {
 		splitBarcodeHash   = make(map[string]int)
 		read1Name          string
 		read2Name          string
+		N                  = 0
+		mapBarcode         string
+		ok                 bool
+		seqName            = "@ST-E0:0:SIMULATE:8:0:0:"
+		qual               = []byte("FFFFFFFFFFFFFFFFFFFFFF#")
+		exclamationMark    = []byte{33}
+		numberSign         = []byte{35}
 	)
 
 	for _, pairEnd := range pairEnds {
@@ -132,16 +166,18 @@ func main() {
 			}
 			readCount++
 			switch readCount % 4 {
-			case 1:
+			case 1: // name
 				read1Name = strings.Split(fq1Scanner.Text(), "/")[0]
 				read2Name = strings.Split(fq2Scanner.Text(), "/")[0]
 				if read1Name != read2Name {
 					log.Fatalf("Error: [%s] not eq [%s] at the %d reads", read1Name, read2Name, readCount)
 				}
-			case 2:
-				var line1 = fq1Scanner.Bytes()
-				var line2 = fq2Scanner.Bytes()
+			case 2: // seq
 				var (
+					line1      = fq1Scanner.Bytes()
+					line2      = fq2Scanner.Bytes()
+					seq1       = line1[0:length1]
+					seq2       = line2[0:length1]
 					b1id, ok1  = barcodeHash[string(line2[length1:length1e])]
 					b2id, ok2  = barcodeHash[string(line2[length2:length2e])]
 					b3id, ok3  = barcodeHash[string(line2[length3:length3e])]
@@ -159,36 +195,73 @@ func main() {
 				}
 				simpleUtil.HandleError(
 					outFq1Zw.Write(
-						[]byte(fmt.Sprintf("%s#%s/1\t%d\t1\n%s\n", read1Name, barcode, barcodeNum, line1[0:length1])),
+						[]byte(
+							fmt.Sprintf(
+								"%s#%s/1\t%d\t1\n%s\n",
+								read1Name, barcode, barcodeNum, seq1,
+							),
+						),
 					),
 				)
 				simpleUtil.HandleError(
 					outFq2Zw.Write(
-						[]byte(fmt.Sprintf("%s#%s/2\t%d\t1\n%s\n", read2Name, barcode, barcodeNum, line2[0:length1])),
+						[]byte(
+							fmt.Sprintf(
+								"%s#%s/2\t%d\t1\n%s\n",
+								read2Name, barcode, barcodeNum, seq2),
+						),
 					),
 				)
-			case 3:
-				simpleUtil.HandleError(
-					outFq1Zw.Write(
-						append(fq1Scanner.Bytes(), '\n'),
-					),
-				)
-				simpleUtil.HandleError(
-					outFq2Zw.Write(
-						append(fq2Scanner.Bytes(), '\n'),
-					),
-				)
-			case 0:
-				simpleUtil.HandleError(
-					outFq1Zw.Write(
-						append(fq1Scanner.Bytes()[0:length1], '\n'),
-					),
-				)
-				simpleUtil.HandleError(
-					outFq2Zw.Write(
-						append(fq2Scanner.Bytes()[0:length1], '\n'),
-					),
-				)
+				var temp = barcodeNum % mlCount
+				if temp == 0 {
+					temp = mlCount
+				}
+				mapBarcode, ok = mapHash[temp]
+				if ok {
+					N++
+					simpleUtil.HandleError(
+						out10xFq1Zw.Write(
+							[]byte(
+								fmt.Sprintf(
+									"%s%d 1:N:0:NAAGTGCT\n%sATCGAGN%s\n",
+									seqName, N, mapBarcode, line1[0:length1],
+								),
+							),
+						),
+					)
+					simpleUtil.HandleError(
+						out10xFq2Zw.Write(
+							[]byte(
+								fmt.Sprintf(
+									"%s%d 2:N:0:NAAGTGCT\n%s\n",
+									seqName, N, line1[0:length1],
+								),
+							),
+						),
+					)
+				}
+			case 3: // note
+				var line1 = append(fq1Scanner.Bytes(), '\n')
+				var line2 = append(fq2Scanner.Bytes(), '\n')
+				simpleUtil.HandleError(outFq1Zw.Write(line1))
+				simpleUtil.HandleError(outFq2Zw.Write(line2))
+				if ok {
+					simpleUtil.HandleError(out10xFq1Zw.Write(line1))
+					simpleUtil.HandleError(out10xFq2Zw.Write(line2))
+				}
+			case 0: // qual
+				var line1 = append(fq1Scanner.Bytes()[0:length1], '\n')
+				var line2 = append(fq2Scanner.Bytes()[0:length1], '\n')
+				simpleUtil.HandleError(outFq1Zw.Write(line1))
+				simpleUtil.HandleError(outFq2Zw.Write(line2))
+				if ok {
+					simpleUtil.HandleError(
+						out10xFq1Zw.Write(append(qual, bytes.ReplaceAll(line1, exclamationMark, numberSign)...)),
+					)
+					simpleUtil.HandleError(
+						out10xFq2Zw.Write(bytes.ReplaceAll(line2, exclamationMark, numberSign)),
+					)
+				}
 			}
 		}
 
