@@ -283,9 +283,10 @@ func main() {
 		"Real_Barcode_types = %d (%f %%)\n",
 		splitBarcodeNum, float64(splitBarcodeNum)/float64(barcodeTypes)*100,
 	)
-	fmt.Printf("Reads_pair_num = %d\n", readCount/4)
-	fmt.Printf("Reads_pair_num(after split) = %d (%f %%)\n", splitCount, float64(splitCount)/float64(readCount)*100)
 	if readCount%4 != 0 {
 		log.Fatalf("Error: fastq line error:[%s]", readCount)
 	}
+	readCount /= 4
+	fmt.Printf("Reads_pair_num = %d\n", readCount)
+	fmt.Printf("Reads_pair_num(after split) = %d (%f %%)\n", splitCount, float64(splitCount)/float64(readCount)*100)
 }
