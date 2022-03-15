@@ -32,7 +32,7 @@ var (
 	)
 	mapList = flag.String(
 		"map",
-		filepath.Join(dbPath, "BIN/4M-with-alts-february-2016.txt"),
+		filepath.Join(dbPath, "4M-with-alts-february-2016.txt"),
 		"map list",
 	)
 	read1 = flag.String(
