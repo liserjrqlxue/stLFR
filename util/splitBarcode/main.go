@@ -55,9 +55,10 @@ func main() {
 	flag.Parse()
 
 	// load barcode list
+	// add 1 mismatch
 	var (
-		barcode_hash = make(map[string]string)
-		n            = 0
+		barcodeHash = make(map[string]string)
+		n           = 0
 	)
 	var bl = osUtil.Open(*barcodeList)
 	defer simpleUtil.DeferClose(bl)
@@ -65,12 +66,12 @@ func main() {
 	for blScan.Scan() {
 		var line = strings.Split(blScan.Text(), "\t")
 		n++
-		var barcode_ID = line[1]
+		var barcodeId = line[1]
 		for _, r := range []rune("ACGT") {
 			for i := 0; i < 10; i++ {
-				var barcode_mis = []rune(line[0])
-				barcode_mis[i] = r
-				barcode_hash[string(barcode_mis)] = barcode_ID
+				var barcodeMis = []rune(line[0])
+				barcodeMis[i] = r
+				barcodeHash[string(barcodeMis)] = barcodeId
 			}
 		}
 	}
@@ -98,6 +99,9 @@ func main() {
 	defer simpleUtil.DeferClose(outFq2Zw)
 
 	var (
+		// barcode seq
+		// ACGTACGTAC NNNNNN GTACGTACGT NNNNNN ACGTACGTAC
+		// n1         n2     n3         n4     n5
 		n1, n2, n3, n4, n5 = 10, 6, 10, 6, 10
 		length1            = *readLength
 		length1e           = length1 + n1
@@ -105,52 +109,52 @@ func main() {
 		length2e           = length2 + n3
 		length3            = *readLength + n1 + n2 + n3 + n4
 		length3e           = length3 + n5
-		barcode_types      = n * n * n
-		num1               = 0
-		num2               = 0
-		k1, k2             string
-		hash               = make(map[string]int)
-		split_barcode_num  = 0
+		readCount          = 0
+		splitCount         = 0
+		splitBarcodeNum    = 0
+		splitBarcodeHash   = make(map[string]int)
+		read1Name          string
+		read2Name          string
 	)
 	for fq1Scanner.Scan() {
 		if !fq2Scanner.Scan() {
 			log.Fatal("Pair End Error!")
 		}
-		num1++
-		switch num1 % 4 {
+		readCount++
+		switch readCount % 4 {
 		case 1:
-			k1 = strings.Split(fq1Scanner.Text(), "/")[0]
-			k2 = strings.Split(fq2Scanner.Text(), "/")[0]
-			if k1 != k2 {
-				log.Fatalf("Error: [%s] not eq [%s] at the %d reads", k1, k2, num1)
+			read1Name = strings.Split(fq1Scanner.Text(), "/")[0]
+			read2Name = strings.Split(fq2Scanner.Text(), "/")[0]
+			if read1Name != read2Name {
+				log.Fatalf("Error: [%s] not eq [%s] at the %d reads", read1Name, read2Name, readCount)
 			}
 		case 2:
 			var line1 = fq1Scanner.Bytes()
 			var line2 = fq1Scanner.Bytes()
 			var (
-				b1id, ok1 = barcode_hash[string(line2[length1:length1e])]
-				b2id, ok2 = barcode_hash[string(line2[length2:length2e])]
-				b3id, ok3 = barcode_hash[string(line2[length3:length3e])]
-				id        = "0_0_0"
-				hash_id   = 0
+				b1id, ok1  = barcodeHash[string(line2[length1:length1e])]
+				b2id, ok2  = barcodeHash[string(line2[length2:length2e])]
+				b3id, ok3  = barcodeHash[string(line2[length3:length3e])]
+				barcode    = "0_0_0"
+				barcodeNum = 0
 			)
 			if ok1 && ok2 && ok3 {
-				id = b1id + "_" + b2id + "_" + b3id
-				num2++
-				if hash[id] == 0 {
-					split_barcode_num++
-					hash[id] = split_barcode_num
+				barcode = b1id + "_" + b2id + "_" + b3id
+				splitCount++
+				if splitBarcodeHash[barcode] == 0 {
+					splitBarcodeNum++
+					splitBarcodeHash[barcode] = splitBarcodeNum
 				}
-				hash_id = hash[id]
+				barcodeNum = splitBarcodeHash[barcode]
 			}
 			simpleUtil.HandleError(
 				outFq1Zw.Write(
-					[]byte(fmt.Sprintf("%s#%s/1\t%d\t1\n%s\n", k1, id, hash_id, line1[0:length1])),
+					[]byte(fmt.Sprintf("%s#%s/1\t%d\t1\n%s\n", read1Name, barcode, barcodeNum, line1[0:length1])),
 				),
 			)
 			simpleUtil.HandleError(
 				outFq2Zw.Write(
-					[]byte(fmt.Sprintf("%s#%s/2\t%d\t1\n%s\n", k2, id, hash_id, line2[0:length1])),
+					[]byte(fmt.Sprintf("%s#%s/2\t%d\t1\n%s\n", read2Name, barcode, barcodeNum, line2[0:length1])),
 				),
 			)
 		case 3:
@@ -178,14 +182,17 @@ func main() {
 		}
 	}
 
-	fmt.Printf("Barcode_types = %d * %d * %d = %d\n", n, n, n, barcode_types)
+	var (
+		barcodeTypes = n * n * n
+	)
+	fmt.Printf("Barcode_types = %d * %d * %d = %d\n", n, n, n, barcodeTypes)
 	fmt.Printf(
 		"Real_Barcode_types = %d (%f %%)\n",
-		split_barcode_num, float64(split_barcode_num)/float64(barcode_types)*100,
+		splitBarcodeNum, float64(splitBarcodeNum)/float64(barcodeTypes)*100,
 	)
-	fmt.Printf("Reads_pair_num = %d\n", num1/4)
-	fmt.Printf("Reads_pair_num(after split) = %d (%f %%)\n", num2, float64(num2)/float64(num1)*100)
-	if num1%4 != 0 {
-		log.Fatalf("Error: fastq line error:[%s]", num1)
+	fmt.Printf("Reads_pair_num = %d\n", readCount/4)
+	fmt.Printf("Reads_pair_num(after split) = %d (%f %%)\n", splitCount, float64(splitCount)/float64(readCount)*100)
+	if readCount%4 != 0 {
+		log.Fatalf("Error: fastq line error:[%s]", readCount)
 	}
 }
