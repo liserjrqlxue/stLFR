@@ -32,12 +32,12 @@ var (
 	read1 = flag.String(
 		"fq1",
 		"",
-		"read 1 of PE",
+		"read 1 of PEs, comma as sep",
 	)
 	read2 = flag.String(
 		"fq2",
 		"",
-		"read 2 of PE",
+		"read 2 of PEs, comma as sep, same order with -fq1",
 	)
 	readLength = flag.Int(
 		"l",
@@ -76,17 +76,16 @@ func main() {
 		}
 	}
 
-	var fq1 = osUtil.Open(*read1)
-	defer simpleUtil.DeferClose(fq1)
-	var fq2 = osUtil.Open(*read2)
-	defer simpleUtil.DeferClose(fq2)
+	var reads1 = strings.Split(*read1, ",")
+	var reads2 = strings.Split(*read2, ",")
+	if len(reads1) != len(reads2) {
+		log.Fatalf("Error: incompatible of pair end")
+	}
+	var pairEnds [][2]string
+	for i := range reads1 {
+		pairEnds = append(pairEnds, [2]string{reads1[i], reads2[i]})
 
-	var fq1Gr = simpleUtil.HandleError(gzip.NewReader(fq1)).(*gzip.Reader)
-	var fq1Scanner = bufio.NewScanner(fq1Gr)
-	simpleUtil.DeferClose(fq1Gr)
-	var fq2Gr = simpleUtil.HandleError(gzip.NewReader(fq2)).(*gzip.Reader)
-	var fq2Scanner = bufio.NewScanner(fq2Gr)
-	simpleUtil.DeferClose(fq2Gr)
+	}
 
 	var outFq1 = osUtil.Create(filepath.Join(*prefix, ".1.fq.gz"))
 	defer simpleUtil.DeferClose(outFq1)
@@ -116,70 +115,86 @@ func main() {
 		read1Name          string
 		read2Name          string
 	)
-	for fq1Scanner.Scan() {
-		if !fq2Scanner.Scan() {
-			log.Fatal("Pair End Error!")
-		}
-		readCount++
-		switch readCount % 4 {
-		case 1:
-			read1Name = strings.Split(fq1Scanner.Text(), "/")[0]
-			read2Name = strings.Split(fq2Scanner.Text(), "/")[0]
-			if read1Name != read2Name {
-				log.Fatalf("Error: [%s] not eq [%s] at the %d reads", read1Name, read2Name, readCount)
+
+	for _, pairEnd := range pairEnds {
+		var fq1 = osUtil.Open(pairEnd[0])
+		var fq2 = osUtil.Open(pairEnd[1])
+
+		var fq1Gr = simpleUtil.HandleError(gzip.NewReader(fq1)).(*gzip.Reader)
+		var fq1Scanner = bufio.NewScanner(fq1Gr)
+		var fq2Gr = simpleUtil.HandleError(gzip.NewReader(fq2)).(*gzip.Reader)
+		var fq2Scanner = bufio.NewScanner(fq2Gr)
+
+		for fq1Scanner.Scan() {
+			if !fq2Scanner.Scan() {
+				log.Fatal("Pair End Error!")
 			}
-		case 2:
-			var line1 = fq1Scanner.Bytes()
-			var line2 = fq1Scanner.Bytes()
-			var (
-				b1id, ok1  = barcodeHash[string(line2[length1:length1e])]
-				b2id, ok2  = barcodeHash[string(line2[length2:length2e])]
-				b3id, ok3  = barcodeHash[string(line2[length3:length3e])]
-				barcode    = "0_0_0"
-				barcodeNum = 0
-			)
-			if ok1 && ok2 && ok3 {
-				barcode = b1id + "_" + b2id + "_" + b3id
-				splitCount++
-				if splitBarcodeHash[barcode] == 0 {
-					splitBarcodeNum++
-					splitBarcodeHash[barcode] = splitBarcodeNum
+			readCount++
+			switch readCount % 4 {
+			case 1:
+				read1Name = strings.Split(fq1Scanner.Text(), "/")[0]
+				read2Name = strings.Split(fq2Scanner.Text(), "/")[0]
+				if read1Name != read2Name {
+					log.Fatalf("Error: [%s] not eq [%s] at the %d reads", read1Name, read2Name, readCount)
 				}
-				barcodeNum = splitBarcodeHash[barcode]
+			case 2:
+				var line1 = fq1Scanner.Bytes()
+				var line2 = fq1Scanner.Bytes()
+				var (
+					b1id, ok1  = barcodeHash[string(line2[length1:length1e])]
+					b2id, ok2  = barcodeHash[string(line2[length2:length2e])]
+					b3id, ok3  = barcodeHash[string(line2[length3:length3e])]
+					barcode    = "0_0_0"
+					barcodeNum = 0
+				)
+				if ok1 && ok2 && ok3 {
+					barcode = b1id + "_" + b2id + "_" + b3id
+					splitCount++
+					if splitBarcodeHash[barcode] == 0 {
+						splitBarcodeNum++
+						splitBarcodeHash[barcode] = splitBarcodeNum
+					}
+					barcodeNum = splitBarcodeHash[barcode]
+				}
+				simpleUtil.HandleError(
+					outFq1Zw.Write(
+						[]byte(fmt.Sprintf("%s#%s/1\t%d\t1\n%s\n", read1Name, barcode, barcodeNum, line1[0:length1])),
+					),
+				)
+				simpleUtil.HandleError(
+					outFq2Zw.Write(
+						[]byte(fmt.Sprintf("%s#%s/2\t%d\t1\n%s\n", read2Name, barcode, barcodeNum, line2[0:length1])),
+					),
+				)
+			case 3:
+				simpleUtil.HandleError(
+					outFq1Zw.Write(
+						append(fq1Scanner.Bytes(), '\n'),
+					),
+				)
+				simpleUtil.HandleError(
+					outFq2Zw.Write(
+						append(fq2Scanner.Bytes(), '\n'),
+					),
+				)
+			case 0:
+				simpleUtil.HandleError(
+					outFq1Zw.Write(
+						append(fq1Scanner.Bytes()[0:length1], '\n'),
+					),
+				)
+				simpleUtil.HandleError(
+					outFq2Zw.Write(
+						append(fq2Scanner.Bytes()[0:length1], '\n'),
+					),
+				)
 			}
-			simpleUtil.HandleError(
-				outFq1Zw.Write(
-					[]byte(fmt.Sprintf("%s#%s/1\t%d\t1\n%s\n", read1Name, barcode, barcodeNum, line1[0:length1])),
-				),
-			)
-			simpleUtil.HandleError(
-				outFq2Zw.Write(
-					[]byte(fmt.Sprintf("%s#%s/2\t%d\t1\n%s\n", read2Name, barcode, barcodeNum, line2[0:length1])),
-				),
-			)
-		case 3:
-			simpleUtil.HandleError(
-				outFq1Zw.Write(
-					append(fq1Scanner.Bytes(), '\n'),
-				),
-			)
-			simpleUtil.HandleError(
-				outFq2Zw.Write(
-					append(fq2Scanner.Bytes(), '\n'),
-				),
-			)
-		case 0:
-			simpleUtil.HandleError(
-				outFq1Zw.Write(
-					append(fq1Scanner.Bytes()[0:length1], '\n'),
-				),
-			)
-			simpleUtil.HandleError(
-				outFq2Zw.Write(
-					append(fq2Scanner.Bytes()[0:length1], '\n'),
-				),
-			)
 		}
+
+		simpleUtil.CheckErr(fq1Gr.Close())
+		simpleUtil.CheckErr(fq2Gr.Close())
+		simpleUtil.CheckErr(fq1.Close())
+		simpleUtil.CheckErr(fq2.Close())
 	}
 
 	var (
