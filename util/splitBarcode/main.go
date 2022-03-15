@@ -53,12 +53,16 @@ var (
 	prefix = flag.String(
 		"prefix",
 		"",
-		"prefix of output[-prefix.{1,2}.fq.gz",
+		"prefix of output[-prefix{_split_read.{1,2}.fq.gz,_S1_L001_R{1,2}_001.fastq.gz}",
 	)
 )
 
 func main() {
 	flag.Parse()
+	if *read1 == "" || *read2 == "" || *prefix == "" {
+		flag.Usage()
+		log.Fatal("-fq1/-fq2/-prefix required!")
+	}
 
 	// load barcode list
 	// add 1 mismatch
