@@ -228,7 +228,7 @@ func main() {
 							[]byte(
 								fmt.Sprintf(
 									"%s%d 1:N:0:NAAGTGCT\n%sATCGAGN%s\n",
-									seqName, N, mapBarcode, line1[0:length1],
+									seqName, N, mapBarcode, seq1,
 								),
 							),
 						),
@@ -238,7 +238,7 @@ func main() {
 							[]byte(
 								fmt.Sprintf(
 									"%s%d 2:N:0:NAAGTGCT\n%s\n",
-									seqName, N, line1[0:length1],
+									seqName, N, seq2,
 								),
 							),
 						),
