@@ -21,7 +21,7 @@ import (
 var (
 	ex, _  = os.Executable()
 	exPath = filepath.Dir(ex)
-	dbPath = filepath.Join(exPath, "..", "..", "BIN")
+	dbPath = filepath.Join(exPath, "..", "..", "db")
 )
 
 var (
@@ -32,7 +32,7 @@ var (
 	)
 	mapList = flag.String(
 		"map",
-		filepath.Join(dbPath, "4M-with-alts-february-2016.txt"),
+		filepath.Join(dbPath, "4M-with-alts-february-2016.txt.gz"),
 		"map list",
 	)
 	read1 = flag.String(
@@ -89,7 +89,9 @@ func main() {
 	// load map list
 	var ml = osUtil.Open(*mapList)
 	defer simpleUtil.DeferClose(ml)
-	var mlScan = bufio.NewScanner(ml)
+	var mlGr = simpleUtil.HandleError(gzip.NewReader(ml)).(*gzip.Reader)
+	defer simpleUtil.DeferClose(mlGr)
+	var mlScan = bufio.NewScanner(mlGr)
 	var mapHash = make(map[int]string)
 	var mlCount = 0
 	for mlScan.Scan() {
