@@ -1,2 +1,1 @@
 db/barcode.list filter=lfs diff=lfs merge=lfs -text
-db/4M-with-alts-february-2016.txt filter=lfs diff=lfs merge=lfs -text
