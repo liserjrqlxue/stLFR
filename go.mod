@@ -7,4 +7,4 @@ require (
 	github.com/liserjrqlxue/goUtil v0.0.45
 )
 
-require github.com/klauspost/compress v1.15.1 // indirect
+require github.com/klauspost/compress v1.15.7 // indirect
