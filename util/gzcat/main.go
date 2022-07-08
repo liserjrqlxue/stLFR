@@ -29,6 +29,11 @@ var (
 		"",
 		"cat output, .gz suffix support",
 	)
+	bufSize = flag.Int(
+		"bufSize",
+		1024*1024,
+		"buffer size",
+	)
 )
 
 func main() {
@@ -54,8 +59,8 @@ func main() {
 			inZr = simpleUtil.HandleError(gzip.NewReader(inF)).(*gzip.Reader)
 		}
 
+		var buf = make([]byte, *bufSize)
 		for {
-			var buf = make([]byte, 1024*1024)
 			var n, err = inZr.Read(buf)
 			if err == io.EOF {
 				break
