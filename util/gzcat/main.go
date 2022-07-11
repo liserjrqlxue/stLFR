@@ -20,7 +20,7 @@ var (
 
 var (
 	input = flag.String(
-		"input",
+		"in",
 		"",
 		"gz file list, comma as sep",
 	)
