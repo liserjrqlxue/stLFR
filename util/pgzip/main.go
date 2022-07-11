@@ -70,7 +70,7 @@ func copy2gz(dest io.WriteCloser, src io.ReadCloser, buf []byte) int64 {
 	var writer = gzip.NewWriter(dest)
 	defer simpleUtil.DeferClose(writer)
 
-	var n, err = io.CopyBuffer(dest, src, buf)
+	var n, err = io.CopyBuffer(writer, src, buf)
 
 	if err != nil && err != io.EOF {
 		log.Fatalf("Error after load %d bytes:[%+v]\n", n, err)
