@@ -14,7 +14,7 @@ import (
 
 var (
 	stdout = flag.Bool(
-		"-c",
+		"c",
 		false,
 		"write on standard output, keep original files unchanged",
 	)
